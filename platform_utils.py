@@ -2,10 +2,11 @@
 """
 平台适配层
 封装 Windows / macOS / Linux 之间的差异，上层模块只调用本模块的统一接口。
-包括：全局快捷键、窗口操作、剪贴板粘贴、字体、图标等。
+包括：全局快捷键、窗口操作、剪贴板粘贴、字体、图标、资源路径等。
 """
 from __future__ import annotations
 
+import os
 import sys
 import platform
 
@@ -16,6 +17,45 @@ import platform
 IS_WINDOWS = sys.platform.startswith("win")
 IS_MACOS = sys.platform == "darwin"
 IS_LINUX = sys.platform.startswith("linux")
+
+
+# ---------------------------------------------------------------------------
+# 路径工具：兼容 PyInstaller 打包后的资源路径
+# ---------------------------------------------------------------------------
+def resource_path(relative_path: str) -> str:
+    """获取资源文件的绝对路径，兼容 PyInstaller 打包后的环境。
+
+    PyInstaller 打包后会将资源解压到临时目录 _MEIPASS，
+    此时 __file__ 指向的路径不正确，需要用 sys._MEIPASS。
+    """
+    base_path = getattr(sys, "_MEIPASS",
+                        os.path.dirname(os.path.abspath(sys.argv[0])))
+    return os.path.join(base_path, relative_path)
+
+
+def get_app_dir() -> str:
+    """获取应用程序目录（用户数据存储位置）。
+
+    - Windows: %APPDATA%/KeyboardWizard
+    - macOS: ~/Library/Application Support/KeyboardWizard
+    - Linux: ~/.local/share/KeyboardWizard
+
+    目录不存在会自动创建。
+    """
+    app_name = "KeyboardWizard"
+    if IS_WINDOWS:
+        base = os.environ.get("APPDATA", os.path.expanduser("~"))
+        path = os.path.join(base, app_name)
+    elif IS_MACOS:
+        path = os.path.join(os.path.expanduser("~"), "Library",
+                            "Application Support", app_name)
+    else:
+        base = os.environ.get("XDG_DATA_HOME",
+                              os.path.join(os.path.expanduser("~"),
+                                           ".local", "share"))
+        path = os.path.join(base, app_name)
+    os.makedirs(path, exist_ok=True)
+    return path
 
 
 def current_os() -> str:
