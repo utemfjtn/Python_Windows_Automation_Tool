@@ -19,13 +19,9 @@ ctk.set_default_color_theme("blue")
 
 class CommandDialog(ctk.CTkToplevel):
     def __init__(self, master, cmd=None, labels=None):
-        """
-        :param cmd: 待编辑命令；为 None 则新建
-        :param labels: 当前列表中已有的标签名，用于跳转目标下拉
-        """
         super().__init__(master)
         self.title("编辑指令")
-        self.geometry("520x560")
+        self.geometry("500x560")
         self.resizable(False, True)
         self.transient(master)
         self.grab_set()
@@ -33,6 +29,7 @@ class CommandDialog(ctk.CTkToplevel):
         self.result = None
         self.labels = labels or []
         self._widgets = {}
+        self._row = 0
 
         if cmd is None:
             cmd = C.make_command(C.KEY)
@@ -40,13 +37,13 @@ class CommandDialog(ctk.CTkToplevel):
         self._data = {k: v for k, v in cmd.items()}
 
         self._build_type_selector()
-        self._params_frame = ctk.CTkFrame(self, fg_color="transparent")
-        self._params_frame.pack(fill="both", expand=True, padx=16, pady=(4, 8))
 
-        self._build_common()
+        self._scroll_frame = ctk.CTkScrollableFrame(self, fg_color="transparent")
+        self._scroll_frame.pack(fill="both", expand=True, padx=16, pady=(4, 8))
+        self._grid_parent = self._scroll_frame
+
         self._rebuild_params()
 
-        # 底部按钮
         btn_frame = ctk.CTkFrame(self, fg_color="transparent")
         btn_frame.pack(fill="x", padx=16, pady=(0, 12))
         ctk.CTkButton(btn_frame, text="取消", width=100,
@@ -57,21 +54,19 @@ class CommandDialog(ctk.CTkToplevel):
         self.protocol("WM_DELETE_WINDOW", self._cancel)
         self.after(50, lambda: self.focus_force())
 
-    # ------------------------------------------------------------------ 类型选择
     def _build_type_selector(self):
         f = ctk.CTkFrame(self, fg_color="transparent")
         f.pack(fill="x", padx=16, pady=(12, 4))
-        ctk.CTkLabel(f, text="指令类型：").pack(side="left")
+        ctk.CTkLabel(f, text="指令类型：", width=80, anchor="e").pack(side="left")
         names = [C.TYPE_NAMES[t] for t in C.ALL_TYPES]
         cur = C.TYPE_NAMES[self._cmd_type]
         self._type_var = ctk.StringVar(value=cur)
         combo = ctk.CTkOptionMenu(
             f, variable=self._type_var, values=names,
-            command=self._on_type_change, width=180)
+            command=self._on_type_change, width=220)
         combo.pack(side="left", padx=8)
 
     def _on_type_change(self, selected_name):
-        # 反查类型
         t = None
         for k, v in C.TYPE_NAMES.items():
             if v == selected_name:
@@ -79,67 +74,75 @@ class CommandDialog(ctk.CTkToplevel):
                 break
         if t and t != self._cmd_type:
             self._cmd_type = t
-            # 切换类型时保留可复用参数，其余用默认
             new_cmd = C.make_command(t)
             self._data = new_cmd
             self._rebuild_params()
 
-    # ------------------------------------------------------------------ 通用字段
-    def _build_common(self):
-        f = ctk.CTkFrame(self, fg_color="transparent")
-        f.pack(fill="x", padx=16, pady=(0, 4))
-        self._enabled_var = ctk.BooleanVar(value=self._data.get("enabled", True))
-        ctk.CTkCheckBox(f, text="启用", variable=self._enabled_var).pack(side="left")
-        ctk.CTkLabel(f, text="备注：").pack(side="left", padx=(16, 4))
-        self._comment_var = ctk.StringVar(value=self._data.get("comment", ""))
-        ctk.CTkEntry(f, textvariable=self._comment_var, width=200).pack(side="left")
+    def _add_row(self, label_text, widget_cls, **kwargs):
+        parent = self._grid_parent
+        ctk.CTkLabel(parent, text=label_text, width=110, anchor="e").grid(
+            row=self._row, column=0, sticky="e", pady=4, padx=(0, 8))
+        widget = widget_cls(parent, **kwargs)
+        widget.grid(row=self._row, column=1, sticky="ew", pady=4)
+        self._row += 1
+        return widget
 
-    # ------------------------------------------------------------------ 参数区
-    def _clear_params(self):
-        for w in self._params_frame.winfo_children():
-            w.destroy()
-        self._widgets = {}
+    def _add_hint(self, text):
+        ctk.CTkLabel(self._grid_parent, text=text, text_color="gray",
+                     anchor="w").grid(row=self._row, column=1, sticky="w",
+                                      padx=(0, 0), pady=(0, 4))
+        self._row += 1
+
+    def _add_button_row(self, *buttons):
+        bf = ctk.CTkFrame(self._grid_parent, fg_color="transparent")
+        bf.grid(row=self._row, column=1, sticky="w", pady=(0, 4))
+        self._row += 1
+        for i, btn in enumerate(buttons):
+            text, cmd = btn
+            pad = (0, 4) if i < len(buttons) - 1 else 0
+            ctk.CTkButton(bf, text=text, width=90, command=cmd).pack(
+                side="left", padx=pad)
 
     def _rebuild_params(self):
-        self._clear_params()
+        for w in list(self._grid_parent.winfo_children()):
+            w.destroy()
+        self._widgets = {}
+        self._row = 0
+
+        self._build_common()
+
         t = self._cmd_type
         p = self._data.get("params", {})
-        b = self._params_frame
+        gp = self._grid_parent
 
-        def row(label, widget):
-            f = ctk.CTkFrame(b, fg_color="transparent")
-            f.pack(fill="x", padx=8, pady=4)
-            ctk.CTkLabel(f, text=label, width=90, anchor="e").pack(side="left")
-            widget.pack(side="left", fill="x", expand=True, padx=(8, 0))
-            return widget
+        gp.grid_columnconfigure(1, weight=1)
 
         if t == C.KEY:
             v = ctk.StringVar(value=p.get("key", ""))
-            e = ctk.CTkEntry(b, textvariable=v)
             self._widgets["key"] = v
-            row("按键：", e)
-            ctk.CTkLabel(b, text="（组合键用 + 连接，如 ctrl+s / ctrl+shift+s）",
-                         text_color="gray").pack(anchor="w", padx=98)
+            self._add_row("按键：", ctk.CTkEntry, textvariable=v)
+            self._add_hint("组合键用 + 连接，如 ctrl+s / ctrl+shift+s")
             hv = ctk.StringVar(value=str(p.get("hold", 0)))
-            he = ctk.CTkEntry(b, textvariable=hv, width=100)
             self._widgets["hold"] = hv
-            row("按住(秒,0为点按)：", he)
+            self._add_row("按住时间(秒)：", ctk.CTkEntry,
+                          textvariable=hv, width=120)
+            self._add_hint("0 表示点按，大于 0 表示按住指定秒数")
 
         elif t == C.CLICK:
             xv = ctk.StringVar(value=str(p.get("x", 0)))
             yv = ctk.StringVar(value=str(p.get("y", 0)))
-            row("X：", ctk.CTkEntry(b, textvariable=xv, width=100))
             self._widgets["x"] = xv
-            row("Y：", ctk.CTkEntry(b, textvariable=yv, width=100))
             self._widgets["y"] = yv
+            self._add_row("X 坐标：", ctk.CTkEntry, textvariable=xv, width=120)
+            self._add_row("Y 坐标：", ctk.CTkEntry, textvariable=yv, width=120)
             bv = ctk.StringVar(value=p.get("button", "left"))
-            row("按键：", ctk.CTkOptionMenu(b, variable=bv, values=C.MOUSE_BUTTONS, width=120))
             self._widgets["button"] = bv
+            self._add_row("鼠标按键：", ctk.CTkOptionMenu,
+                          variable=bv, values=C.MOUSE_BUTTONS, width=120)
             cv = ctk.StringVar(value=str(p.get("clicks", 1)))
-            row("点击次数：", ctk.CTkEntry(b, textvariable=cv, width=100))
             self._widgets["clicks"] = cv
-            # 坐标拾取按钮
-            ctk.CTkButton(b, text="拾取屏幕坐标", command=self._pick_pos).pack(anchor="w", padx=98, pady=4)
+            self._add_row("点击次数：", ctk.CTkEntry, textvariable=cv, width=120)
+            self._add_button_row(("拾取屏幕坐标", self._pick_pos))
 
         elif t == C.IMAGE_CLICK:
             self._build_image_picker(p, with_click_opts=True)
@@ -149,89 +152,120 @@ class CommandDialog(ctk.CTkToplevel):
 
         elif t == C.INPUT_TEXT:
             tv = ctk.StringVar(value=p.get("text", ""))
-            row("文本：", ctk.CTkEntry(b, textvariable=tv))
             self._widgets["text"] = tv
+            self._add_row("输入文本：", ctk.CTkEntry, textvariable=tv)
             iv = ctk.StringVar(value=str(p.get("interval", 0)))
-            row("字符间隔(秒)：", ctk.CTkEntry(b, textvariable=iv, width=100))
             self._widgets["interval"] = iv
+            self._add_row("字符间隔(秒)：", ctk.CTkEntry,
+                          textvariable=iv, width=120)
+            self._add_hint("每个字符之间的输入间隔，0 表示最快（剪贴板粘贴）")
 
         elif t == C.DELAY:
             mv = ctk.StringVar(value=str(p.get("ms", 1000)))
-            row("延时(毫秒)：", ctk.CTkEntry(b, textvariable=mv, width=120))
             self._widgets["ms"] = mv
+            self._add_row("延时(毫秒)：", ctk.CTkEntry, textvariable=mv, width=120)
+            self._add_hint("1000 毫秒 = 1 秒")
 
         elif t == C.REPEAT:
             cv = ctk.StringVar(value=str(p.get("count", 3)))
-            row("重复次数：", ctk.CTkEntry(b, textvariable=cv, width=100))
             self._widgets["count"] = cv
-            ctk.CTkLabel(b, text="（需与“重复结束”配对使用）", text_color="gray").pack(anchor="w", padx=98)
+            self._add_row("重复次数：", ctk.CTkEntry, textvariable=cv, width=120)
+            self._add_hint("需与「重复结束」指令配对使用")
 
         elif t in (C.IF_IMAGE, C.IF_NOT_IMAGE):
             self._build_image_picker(p, condition=True)
 
         elif t == C.IF_WINDOW:
             tv = ctk.StringVar(value=p.get("title", ""))
-            row("窗口标题：", ctk.CTkEntry(b, textvariable=tv))
             self._widgets["title"] = tv
-            ctk.CTkLabel(b, text="（模糊匹配，包含该关键词即成立）", text_color="gray").pack(anchor="w", padx=98)
+            self._add_row("窗口标题：", ctk.CTkEntry, textvariable=tv)
+            self._add_hint("模糊匹配，窗口标题包含该关键词即成立")
 
         elif t == C.LABEL:
             nv = ctk.StringVar(value=p.get("name", "label1"))
-            row("标签名：", ctk.CTkEntry(b, textvariable=nv))
             self._widgets["name"] = nv
+            self._add_row("标签名：", ctk.CTkEntry, textvariable=nv)
+            self._add_hint("供「跳转」指令引用，同一脚本中标签名不能重复")
 
         elif t == C.GOTO:
             opts = self.labels if self.labels else ["label1"]
             nv = ctk.StringVar(value=p.get("name", opts[0]))
-            row("目标标签：", ctk.CTkOptionMenu(b, variable=nv, values=opts))
             self._widgets["name"] = nv
+            self._add_row("目标标签：", ctk.CTkOptionMenu,
+                          variable=nv, values=opts)
+            self._add_hint("跳转到指定标签处继续执行")
 
         elif t in (C.END_REPEAT, C.END_IF):
-            ctk.CTkLabel(b, text="该指令无需参数", text_color="gray").pack(pady=20)
+            ctk.CTkLabel(gp, text="该指令无需参数", text_color="gray").grid(
+                row=self._row, column=0, columnspan=2, pady=20)
+            self._row += 1
+
+        ctk.CTkFrame(gp, height=8, fg_color="transparent").grid(
+            row=self._row, column=0, columnspan=2)
+        self._row += 1
+
+    def _build_common(self):
+        gp = self._grid_parent
+        self._enabled_var = ctk.BooleanVar(value=self._data.get("enabled", True))
+        ctk.CTkCheckBox(gp, text="启用", variable=self._enabled_var).grid(
+            row=self._row, column=0, sticky="w", pady=(4, 8))
+        self._row += 1
+
+        ctk.CTkLabel(gp, text="备注：", width=110, anchor="e").grid(
+            row=self._row, column=0, sticky="e", pady=4, padx=(0, 8))
+        self._comment_var = ctk.StringVar(value=self._data.get("comment", ""))
+        ctk.CTkEntry(gp, textvariable=self._comment_var).grid(
+            row=self._row, column=1, sticky="ew", pady=4)
+        self._row += 1
+
+        sep = ctk.CTkFrame(gp, height=2)
+        sep.grid(row=self._row, column=0, columnspan=2, sticky="ew",
+                 pady=(4, 8))
+        self._row += 1
 
     def _build_image_picker(self, p, with_click_opts=False, with_timeout=False, condition=False):
-        b = self._params_frame
+        gp = self._grid_parent
         iv = ctk.StringVar(value=p.get("image", ""))
         self._widgets["image"] = iv
 
-        def row(label, widget, w=None):
-            f = ctk.CTkFrame(b, fg_color="transparent")
-            f.pack(fill="x", padx=8, pady=4)
-            ctk.CTkLabel(f, text=label, width=90, anchor="e").pack(side="left")
-            widget.pack(side="left", fill="x", expand=True, padx=(8, 0))
-
-        ent = ctk.CTkEntry(b, textvariable=iv)
-        row("图片：", ent)
-
-        bf = ctk.CTkFrame(b, fg_color="transparent")
-        bf.pack(fill="x", padx=8, pady=2)
-        ctk.CTkButton(bf, text="选择文件", width=100, command=lambda: self._pick_file(iv)).pack(side="left", padx=(98, 4))
-        ctk.CTkButton(bf, text="截图区域", width=100, command=lambda: self._capture_region(iv)).pack(side="left")
+        self._add_row("图片路径：", ctk.CTkEntry, textvariable=iv)
+        self._add_button_row(
+            ("选择文件", lambda: self._pick_file(iv)),
+            ("截图区域", lambda: self._capture_region(iv)),
+        )
 
         cv = ctk.StringVar(value=str(p.get("confidence", 0.8)))
-        row("置信度(0~1)：", ctk.CTkEntry(b, textvariable=cv, width=100))
         self._widgets["confidence"] = cv
+        self._add_row("置信度(0~1)：", ctk.CTkEntry,
+                      textvariable=cv, width=120)
+        self._add_hint("数值越高匹配越严格，建议 0.7~0.9")
 
         if with_click_opts:
             bv = ctk.StringVar(value=p.get("button", "left"))
-            row("鼠标按键：", ctk.CTkOptionMenu(b, variable=bv, values=C.MOUSE_BUTTONS, width=120))
             self._widgets["button"] = bv
+            self._add_row("鼠标按键：", ctk.CTkOptionMenu,
+                          variable=bv, values=C.MOUSE_BUTTONS, width=120)
             clv = ctk.StringVar(value=str(p.get("clicks", 1)))
-            row("点击次数：", ctk.CTkEntry(b, textvariable=clv, width=100))
             self._widgets["clicks"] = clv
+            self._add_row("点击次数：", ctk.CTkEntry,
+                          textvariable=clv, width=120)
             oxv = ctk.StringVar(value=str(p.get("offset_x", 0)))
             oyv = ctk.StringVar(value=str(p.get("offset_y", 0)))
-            row("偏移X：", ctk.CTkEntry(b, textvariable=oxv, width=80))
             self._widgets["offset_x"] = oxv
-            row("偏移Y：", ctk.CTkEntry(b, textvariable=oyv, width=80))
             self._widgets["offset_y"] = oyv
+            self._add_row("偏移 X：", ctk.CTkEntry,
+                          textvariable=oxv, width=120)
+            self._add_row("偏移 Y：", ctk.CTkEntry,
+                          textvariable=oyv, width=120)
+            self._add_hint("相对于图片中心的偏移像素，正数向右/下")
 
         if with_timeout:
             tv = ctk.StringVar(value=str(p.get("timeout", 10)))
-            row("超时(秒)：", ctk.CTkEntry(b, textvariable=tv, width=100))
             self._widgets["timeout"] = tv
+            self._add_row("超时(秒)：", ctk.CTkEntry,
+                          textvariable=tv, width=120)
+            self._add_hint("等待超过该时间仍未出现图片则继续向下执行")
 
-    # ------------------------------------------------------------------ 选择器回调
     def _pick_file(self, var):
         path = filedialog.askopenfilename(
             filetypes=[("图片", "*.png *.jpg *.jpeg *.bmp"), ("所有文件", "*.*")])
@@ -265,13 +299,11 @@ class CommandDialog(ctk.CTkToplevel):
             self.deiconify()
             self.focus_force()
 
-    # ------------------------------------------------------------------ 确定/取消
     def _collect(self):
         t = self._cmd_type
         params = dict(C.PARAM_SCHEMA.get(t, {}))
         for key, var in self._widgets.items():
             val = var.get()
-            # 类型转换
             if key in ("x", "y", "clicks", "ms", "count", "offset_x", "offset_y"):
                 try:
                     params[key] = int(float(val))
@@ -301,7 +333,6 @@ class CommandDialog(ctk.CTkToplevel):
 
 
 def edit_command(master, cmd=None, labels=None):
-    """弹出编辑对话框，返回编辑后的命令或 None（取消）。"""
     dlg = CommandDialog(master, cmd=cmd, labels=labels)
     master.wait_window(dlg)
     return dlg.result

@@ -621,7 +621,7 @@ class MonitorRuleDialog(ctk.CTkToplevel):
     def __init__(self, master, rule):
         super().__init__(master)
         self.title("监控规则")
-        self.geometry("500x480")
+        self.geometry("500x500")
         self.transient(master)
         self.grab_set()
 
@@ -642,59 +642,79 @@ class MonitorRuleDialog(ctk.CTkToplevel):
         self.action_image_var = ctk.StringVar(value=rule.get("action_image", ""))
         self.enabled_var = ctk.BooleanVar(value=rule.get("enabled", True))
 
-        # 参数容器：每次切换类型/动作时重建，避免 pack 顺序混乱
-        self._param_box = ctk.CTkFrame(self, fg_color="transparent")
-        self._param_box.pack(fill="both", expand=True, padx=12, pady=4)
+        self._scroll_frame = ctk.CTkScrollableFrame(self, fg_color="transparent")
+        self._scroll_frame.pack(fill="both", expand=True, padx=12, pady=4)
+        self._gp = self._scroll_frame
+        self._row_idx = 0
+
         self._rebuild_params()
 
-        ctk.CTkCheckBox(self, text="启用", variable=self.enabled_var).pack(anchor="w", padx=108, pady=4)
+        ctk.CTkCheckBox(self, text="启用", variable=self.enabled_var).pack(
+            anchor="w", padx=108, pady=4)
 
         bf = ctk.CTkFrame(self, fg_color="transparent")
         bf.pack(fill="x", padx=12, pady=10)
-        ctk.CTkButton(bf, text="取消", width=80, command=self.destroy).pack(side="right", padx=(8, 0))
+        ctk.CTkButton(bf, text="取消", width=80, command=self.destroy).pack(
+            side="right", padx=(8, 0))
         ctk.CTkButton(bf, text="确定", width=80, command=self._ok).pack(side="right")
         self.focus_force()
 
-    def _row(self, label, widget):
-        f = ctk.CTkFrame(self._param_box, fg_color="transparent")
-        f.pack(fill="x", padx=4, pady=4)
-        ctk.CTkLabel(f, text=label, width=90, anchor="e").pack(side="left")
-        widget.pack(side="left", fill="x", expand=True, padx=(8, 0))
-        return f
+    def _add_row(self, label_text, widget_cls, **kwargs):
+        gp = self._gp
+        ctk.CTkLabel(gp, text=label_text, width=100, anchor="e").grid(
+            row=self._row_idx, column=0, sticky="e", pady=4, padx=(0, 8))
+        widget = widget_cls(gp, **kwargs)
+        widget.grid(row=self._row_idx, column=1, sticky="ew", pady=4)
+        self._row_idx += 1
+        return widget
 
-    def _image_row(self, label, var):
-        f = ctk.CTkFrame(self._param_box, fg_color="transparent")
-        f.pack(fill="x", padx=4, pady=4)
-        ctk.CTkLabel(f, text=label, width=90, anchor="e").pack(side="left")
-        ctk.CTkEntry(f, textvariable=var).pack(side="left", fill="x", expand=True, padx=(8, 4))
-        ctk.CTkButton(f, text="截图", width=60, command=lambda: self._capture(var)).pack(side="left")
-        ctk.CTkButton(f, text="文件", width=60, command=lambda: self._pick_file(var)).pack(side="left", padx=4)
-        return f
+    def _add_hint(self, text):
+        ctk.CTkLabel(self._gp, text=text, text_color="gray",
+                     anchor="w").grid(row=self._row_idx, column=1, sticky="w",
+                                      pady=(0, 4))
+        self._row_idx += 1
+
+    def _add_image_row(self, label_text, var):
+        self._add_row(label_text, ctk.CTkEntry, textvariable=var)
+        bf = ctk.CTkFrame(self._gp, fg_color="transparent")
+        bf.grid(row=self._row_idx, column=1, sticky="w", pady=(0, 4))
+        self._row_idx += 1
+        ctk.CTkButton(bf, text="选择文件", width=80,
+                      command=lambda: self._pick_file(var)).pack(side="left", padx=(0, 4))
+        ctk.CTkButton(bf, text="截图区域", width=80,
+                      command=lambda: self._capture(var)).pack(side="left")
 
     def _rebuild_params(self):
-        for w in self._param_box.winfo_children():
+        for w in list(self._gp.winfo_children()):
             w.destroy()
-        self._row("名称：", ctk.CTkEntry(self._param_box, textvariable=self.name_var))
-        self._row("匹配方式：", ctk.CTkOptionMenu(
-            self._param_box, variable=self.type_var, values=["window", "image"],
-            width=120, command=lambda v: self._rebuild_params()))
+        self._row_idx = 0
+        self._gp.grid_columnconfigure(1, weight=1)
+
+        self._add_row("名称：", ctk.CTkEntry, textvariable=self.name_var)
+        self._add_row("匹配方式：", ctk.CTkOptionMenu,
+                      variable=self.type_var, values=["window", "image"],
+                      width=120, command=lambda v: self._rebuild_params())
         if self.type_var.get() == "window":
-            self._row("窗口标题：", ctk.CTkEntry(self._param_box, textvariable=self.title_var))
-            ctk.CTkLabel(self._param_box, text="（模糊匹配，包含关键词即触发）",
-                         text_color="gray").pack(anchor="w", padx=108)
+            self._add_row("窗口标题：", ctk.CTkEntry, textvariable=self.title_var)
+            self._add_hint("模糊匹配，包含关键词即触发")
         else:
-            self._image_row("图片：", self.image_var)
-            self._row("置信度：", ctk.CTkEntry(self._param_box, textvariable=self.conf_var, width=80))
-        self._row("动作：", ctk.CTkOptionMenu(
-            self._param_box, variable=self.action_var, values=MONITOR_ACTIONS,
-            width=140, command=lambda v: self._rebuild_params()))
+            self._add_image_row("图片：", self.image_var)
+            self._add_row("置信度：", ctk.CTkEntry,
+                          textvariable=self.conf_var, width=80)
+        self._add_row("动作：", ctk.CTkOptionMenu,
+                      variable=self.action_var, values=MONITOR_ACTIONS,
+                      width=140, command=lambda v: self._rebuild_params())
         act = self.action_var.get()
         if act == "custom_key":
-            self._row("动作按键：", ctk.CTkEntry(self._param_box, textvariable=self.action_key_var, width=120))
-            ctk.CTkLabel(self._param_box, text="（组合键用 + 连接，如 ctrl+s）",
-                         text_color="gray").pack(anchor="w", padx=108)
+            self._add_row("动作按键：", ctk.CTkEntry,
+                          textvariable=self.action_key_var, width=120)
+            self._add_hint("组合键用 + 连接，如 ctrl+s")
         elif act == "click_image":
-            self._image_row("动作图片：", self.action_image_var)
+            self._add_image_row("动作图片：", self.action_image_var)
+
+        ctk.CTkFrame(self._gp, height=8, fg_color="transparent").grid(
+            row=self._row_idx, column=0, columnspan=2)
+        self._row_idx += 1
 
     def _pick_file(self, var):
         p = filedialog.askopenfilename(filetypes=[("图片", "*.png *.jpg *.bmp")])
