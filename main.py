@@ -81,9 +81,46 @@ def _check_deps():
 
 def main():
     _check_deps()
-    from app import App
-    app = App()
-    app.mainloop()
+    # 捕获所有异常写入日志文件，方便排查打包后的崩溃
+    import traceback
+    try:
+        from app import App
+        app = App()
+        app.mainloop()
+    except Exception:
+        log_path = _write_crash_log(traceback.format_exc())
+        try:
+            from tkinter import messagebox, Tk
+            root = Tk()
+            root.withdraw()
+            messagebox.showerror(
+                "启动失败",
+                f"程序启动时发生错误：\n\n{traceback.format_exc()[:500]}\n\n"
+                f"完整日志已保存到：\n{log_path}",
+            )
+        except Exception:
+            pass
+        raise
+
+
+def _write_crash_log(content: str) -> str:
+    """将崩溃日志写入应用数据目录，返回日志文件路径。"""
+    import time
+    try:
+        from platform_utils import get_app_dir
+        log_dir = get_app_dir()
+    except Exception:
+        log_dir = os.path.expanduser("~")
+    os.makedirs(log_dir, exist_ok=True)
+    log_path = os.path.join(log_dir, "crash.log")
+    with open(log_path, "w", encoding="utf-8") as f:
+        f.write(f"时间：{time.strftime('%Y-%m-%d %H:%M:%S')}\n")
+        f.write(f"Python：{sys.version}\n")
+        f.write(f"平台：{sys.platform}\n")
+        f.write(f"可执行文件：{sys.executable}\n")
+        f.write("-" * 60 + "\n")
+        f.write(content)
+    return log_path
 
 
 if __name__ == "__main__":
