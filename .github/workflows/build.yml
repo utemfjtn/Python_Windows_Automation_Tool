@@ -6,6 +6,11 @@ on:
     tags:
       - "v*"
 
+# 关键：默认 GITHUB_TOKEN 只有 read 权限，无法创建 Release
+# 必须显式声明 contents: write 才能调用 releases API
+permissions:
+  contents: write
+
 jobs:
   build:
     strategy:
@@ -14,15 +19,15 @@ jobs:
         include:
           - os: windows-latest
             name: Windows
-            artifact_name: 按键精灵-windows
+            artifact_name: KeyboardWizard-windows
             ext: exe
           - os: macos-latest
             name: macOS
-            artifact_name: 按键精灵-macos
+            artifact_name: KeyboardWizard-macos
             ext: app
           - os: ubuntu-latest
             name: Linux
-            artifact_name: 按键精灵-linux
+            artifact_name: KeyboardWizard-linux
             ext: bin
 
     runs-on: ${{ matrix.os }}
@@ -80,61 +85,79 @@ jobs:
           echo "==== entitlements 检查 ===="
           codesign -d --entitlements - "$APP" 2>&1 || true
 
-      - name: 整理产物（Windows）
-        if: runner.os == 'Windows'
-        shell: pwsh
+      - name: 重命名产物（统一命名规范）
+        shell: bash
         run: |
-          $exe = Get-ChildItem dist -Filter *.exe | Select-Object -First 1
-          if ($exe) {
-            Write-Host "产物：$($exe.FullName)"
-          }
+          set -e
+          mkdir -p release
+          if [ "${{ runner.os }}" = "Windows" ]; then
+            # Windows 产物是 dist/按键精灵.exe
+            cp dist/*.exe release/KeyboardWizard-windows.exe 2>/dev/null || true
+          elif [ "${{ runner.os }}" = "macOS" ]; then
+            # macOS 产物是 dist/按键精灵.app（目录），需要打包成 zip
+            cd dist && zip -r -y ../release/KeyboardWizard-macos.app.zip 按键精灵.app && cd ..
+          elif [ "${{ runner.os }}" = "Linux" ]; then
+            # Linux 产物是 dist/按键精灵（无后缀的可执行文件）
+            cp dist/按键精灵 release/KeyboardWizard-linux 2>/dev/null || true
+            chmod +x release/KeyboardWizard-linux 2>/dev/null || true
+          fi
+          echo "==== release 目录内容 ===="
+          ls -la release/
 
-      - name: 整理产物（macOS）
-        if: runner.os == 'macOS'
-        run: |
-          ls -la dist/
-
-      - name: 整理产物（Linux）
-        if: runner.os == 'Linux'
-        run: |
-          ls -la dist/
-
-      - name: 上传产物（手动触发时）
-        if: github.event_name == 'workflow_dispatch'
+      - name: 上传构建产物
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.artifact_name }}
-          path: |
-            dist/*.exe
-            dist/*.app
-            dist/按键精灵
+          path: release/*
           if-no-files-found: error
 
-      - name: 发布 Release（打 tag 时自动）
-        if: startsWith(github.ref, 'refs/tags/')
+  # 单独的 release job：等所有平台构建完成后，下载全部产物统一发布
+  # 避免矩阵多 job 并发创建同一个 release 造成冲突
+  release:
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    name: 发布 Release
+
+    steps:
+      - name: 下载所有构建产物
+        uses: actions/download-artifact@v4
+        with:
+          path: release-assets
+          merge-multiple: false
+
+      - name: 整理产物到单一目录
+        run: |
+          set -e
+          mkdir -p final
+          # 把每个子目录里的产物平铺到 final/
+          find release-assets -type f -exec cp {} final/ \;
+          echo "==== 最终发布文件 ===="
+          ls -la final/
+
+      - name: 发布 Release
         uses: softprops/action-gh-release@v2
         with:
-          files: |
-            dist/*.exe
-            dist/*.app
-            dist/按键精灵
-          name: 按键精灵 ${{ github.ref_name }}
+          files: final/*
+          name: KeyboardWizard ${{ github.ref_name }}
           body: |
             ## 使用方法
 
             ### Windows
-            1. 下载 `按键精灵.exe`（约 40-60 MB）
+            1. 下载 `KeyboardWizard-windows.exe`（约 40-60 MB）
             2. 双击即可运行，无需安装 Python
             3. 如按键/截图无反应，右键 → 以管理员身份运行
 
             ### macOS
-            1. 下载 `按键精灵.app`（约 50-70 MB）
-            2. 拖入应用程序文件夹即可运行
+            1. 下载 `KeyboardWizard-macos.app.zip`（约 50-70 MB）
+            2. 解压后拖入应用程序文件夹
             3. 首次运行需在「系统设置 → 隐私与安全性」中允许打开
-            4. 需在「辅助功能」和「屏幕录制」中授予权限
+            4. **若 .app 闪退**：先删除旧的 .app 再放入新版本（避免旧签名缓存）
+            5. 需在「辅助功能」和「输入监控」中授予权限
+            6. 若仍崩溃，查看 `~/Library/Application Support/KeyboardWizard/crash.log`
 
             ### Linux
-            1. 下载 `按键精灵`（约 40-60 MB）
-            2. 添加执行权限：`chmod +x 按键精灵`
-            3. 运行：`./按键精灵`
+            1. 下载 `KeyboardWizard-linux`（约 40-60 MB）
+            2. 添加执行权限：`chmod +x KeyboardWizard-linux`
+            3. 运行：`./KeyboardWizard-linux`
             4. 建议使用 X11 会话（Wayland 下截图可能受限制）
