@@ -116,13 +116,13 @@ class App(ctk.CTk):
             "请在系统设置中授予权限：\n"
             "  系统设置 → 隐私与安全性 → 辅助功能\n"
             "  勾选 KeyboardWizard\n\n"
-            "授权后重启应用即可使用全部功能。\n\n"
+            "⚠️ 重要：授权后必须重启 KeyboardWizard 才能生效！\n\n"
             "是否现在打开系统设置？",
         )
         if result:
             open_accessibility_settings()
-        self._log("提示：未授予辅助功能权限，全局快捷键不可用", "warn")
-        self._log("请在「系统设置 → 隐私与安全性 → 辅助功能」中授权 KeyboardWizard", "warn")
+        self._log("提示：未授予辅助功能权限，全局快捷键和鼠标操作不可用", "warn")
+        self._log("请在「系统设置 → 隐私与安全性 → 辅助功能」中授权并重启应用", "warn")
 
     # ------------------------------------------------------------------ 图标
     def _try_set_icon(self):

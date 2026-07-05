@@ -88,8 +88,9 @@ class Executor:
             from platform_utils import has_accessibility_permission
             if not has_accessibility_permission():
                 self.on_log("警告：未授予辅助功能权限", "warn")
-                self.on_log("鼠标点击和按键操作可能无法生效", "warn")
+                self.on_log("鼠标点击和按键操作将无法生效", "warn")
                 self.on_log("请在「系统设置 → 隐私与安全性 → 辅助功能」中授权", "warn")
+                self.on_log("⚠️ 授权后必须重启 KeyboardWizard 才能生效！", "warn")
         except Exception:
             pass
 
