@@ -106,11 +106,12 @@ class CommandDialog(ctk.CTkToplevel):
         p = self._data.get("params", {})
         b = self._params_frame
 
-        def row(label, widget):
+        def row(label_text, widget):
             f = ctk.CTkFrame(b, fg_color="transparent")
             f.pack(fill="x", padx=8, pady=4)
-            ctk.CTkLabel(f, text=label, width=90, anchor="e").pack(side="left")
-            widget.pack(side="left", fill="x", expand=True, padx=(8, 0))
+            lbl = ctk.CTkLabel(f, text=label_text)
+            lbl.pack(side="left", padx=(0, 8), anchor="e")
+            widget.pack(side="left", fill="x", expand=True)
             return widget
 
         if t == C.KEY:
@@ -119,7 +120,7 @@ class CommandDialog(ctk.CTkToplevel):
             self._widgets["key"] = v
             row("按键：", e)
             ctk.CTkLabel(b, text="（组合键用 + 连接，如 ctrl+s / ctrl+shift+s）",
-                         text_color="gray").pack(anchor="w", padx=98)
+                         text_color="gray").pack(anchor="w", padx=8, pady=(0, 4))
             hv = ctk.StringVar(value=str(p.get("hold", 0)))
             he = ctk.CTkEntry(b, textvariable=hv, width=100)
             self._widgets["hold"] = hv
@@ -128,18 +129,28 @@ class CommandDialog(ctk.CTkToplevel):
         elif t == C.CLICK:
             xv = ctk.StringVar(value=str(p.get("x", 0)))
             yv = ctk.StringVar(value=str(p.get("y", 0)))
-            row("X：", ctk.CTkEntry(b, textvariable=xv, width=100))
-            self._widgets["x"] = xv
-            row("Y：", ctk.CTkEntry(b, textvariable=yv, width=100))
-            self._widgets["y"] = yv
             bv = ctk.StringVar(value=p.get("button", "left"))
-            row("按键：", ctk.CTkOptionMenu(b, variable=bv, values=C.MOUSE_BUTTONS, width=120))
-            self._widgets["button"] = bv
             cv = ctk.StringVar(value=str(p.get("clicks", 1)))
-            row("点击次数：", ctk.CTkEntry(b, textvariable=cv, width=100))
+
+            f1 = ctk.CTkFrame(b, fg_color="transparent")
+            f1.pack(fill="x", padx=8, pady=4)
+            ctk.CTkLabel(f1, text="X：").pack(side="left", padx=(0, 8))
+            ctk.CTkEntry(f1, textvariable=xv, width=100).pack(side="left", padx=(0, 16))
+            ctk.CTkLabel(f1, text="Y：").pack(side="left", padx=(0, 8))
+            ctk.CTkEntry(f1, textvariable=yv, width=100).pack(side="left")
+            self._widgets["x"] = xv
+            self._widgets["y"] = yv
+
+            f2 = ctk.CTkFrame(b, fg_color="transparent")
+            f2.pack(fill="x", padx=8, pady=4)
+            ctk.CTkLabel(f2, text="按键：").pack(side="left", padx=(0, 8))
+            ctk.CTkOptionMenu(f2, variable=bv, values=C.MOUSE_BUTTONS, width=120).pack(side="left", padx=(0, 16))
+            ctk.CTkLabel(f2, text="点击次数：").pack(side="left", padx=(0, 8))
+            ctk.CTkEntry(f2, textvariable=cv, width=60).pack(side="left")
+            self._widgets["button"] = bv
             self._widgets["clicks"] = cv
-            # 坐标拾取按钮
-            ctk.CTkButton(b, text="拾取屏幕坐标", command=self._pick_pos).pack(anchor="w", padx=98, pady=4)
+
+            ctk.CTkButton(b, text="拾取屏幕坐标", command=self._pick_pos).pack(anchor="w", padx=8, pady=4)
 
         elif t == C.IMAGE_CLICK:
             self._build_image_picker(p, with_click_opts=True)
@@ -149,10 +160,15 @@ class CommandDialog(ctk.CTkToplevel):
 
         elif t == C.INPUT_TEXT:
             tv = ctk.StringVar(value=p.get("text", ""))
-            row("文本：", ctk.CTkEntry(b, textvariable=tv))
-            self._widgets["text"] = tv
             iv = ctk.StringVar(value=str(p.get("interval", 0)))
-            row("字符间隔(秒)：", ctk.CTkEntry(b, textvariable=iv, width=100))
+
+            f = ctk.CTkFrame(b, fg_color="transparent")
+            f.pack(fill="x", padx=8, pady=4)
+            ctk.CTkLabel(f, text="文本：").pack(side="left", padx=(0, 8))
+            ctk.CTkEntry(f, textvariable=tv).pack(side="left", fill="x", expand=True, padx=(0, 16))
+            ctk.CTkLabel(f, text="字符间隔(秒)：").pack(side="left", padx=(0, 8))
+            ctk.CTkEntry(f, textvariable=iv, width=60).pack(side="left")
+            self._widgets["text"] = tv
             self._widgets["interval"] = iv
 
         elif t == C.DELAY:
@@ -164,7 +180,7 @@ class CommandDialog(ctk.CTkToplevel):
             cv = ctk.StringVar(value=str(p.get("count", 3)))
             row("重复次数：", ctk.CTkEntry(b, textvariable=cv, width=100))
             self._widgets["count"] = cv
-            ctk.CTkLabel(b, text="（需与“重复结束”配对使用）", text_color="gray").pack(anchor="w", padx=98)
+            ctk.CTkLabel(b, text="（需与“重复结束”配对使用）", text_color="gray").pack(anchor="w", padx=8, pady=(0, 4))
 
         elif t in (C.IF_IMAGE, C.IF_NOT_IMAGE):
             self._build_image_picker(p, condition=True)
@@ -173,7 +189,7 @@ class CommandDialog(ctk.CTkToplevel):
             tv = ctk.StringVar(value=p.get("title", ""))
             row("窗口标题：", ctk.CTkEntry(b, textvariable=tv))
             self._widgets["title"] = tv
-            ctk.CTkLabel(b, text="（模糊匹配，包含该关键词即成立）", text_color="gray").pack(anchor="w", padx=98)
+            ctk.CTkLabel(b, text="（模糊匹配，包含该关键词即成立）", text_color="gray").pack(anchor="w", padx=8, pady=(0, 4))
 
         elif t == C.LABEL:
             nv = ctk.StringVar(value=p.get("name", "label1"))
@@ -194,18 +210,18 @@ class CommandDialog(ctk.CTkToplevel):
         iv = ctk.StringVar(value=p.get("image", ""))
         self._widgets["image"] = iv
 
-        def row(label, widget, w=None):
+        def row(label_text, widget):
             f = ctk.CTkFrame(b, fg_color="transparent")
             f.pack(fill="x", padx=8, pady=4)
-            ctk.CTkLabel(f, text=label, width=90, anchor="e").pack(side="left")
-            widget.pack(side="left", fill="x", expand=True, padx=(8, 0))
+            ctk.CTkLabel(f, text=label_text).pack(side="left", padx=(0, 8))
+            widget.pack(side="left", fill="x", expand=True)
 
         ent = ctk.CTkEntry(b, textvariable=iv)
         row("图片：", ent)
 
         bf = ctk.CTkFrame(b, fg_color="transparent")
         bf.pack(fill="x", padx=8, pady=2)
-        ctk.CTkButton(bf, text="选择文件", width=100, command=lambda: self._pick_file(iv)).pack(side="left", padx=(98, 4))
+        ctk.CTkButton(bf, text="选择文件", width=100, command=lambda: self._pick_file(iv)).pack(side="left", padx=(0, 4))
         ctk.CTkButton(bf, text="截图区域", width=100, command=lambda: self._capture_region(iv)).pack(side="left")
 
         cv = ctk.StringVar(value=str(p.get("confidence", 0.8)))
@@ -214,16 +230,26 @@ class CommandDialog(ctk.CTkToplevel):
 
         if with_click_opts:
             bv = ctk.StringVar(value=p.get("button", "left"))
-            row("鼠标按键：", ctk.CTkOptionMenu(b, variable=bv, values=C.MOUSE_BUTTONS, width=120))
-            self._widgets["button"] = bv
             clv = ctk.StringVar(value=str(p.get("clicks", 1)))
-            row("点击次数：", ctk.CTkEntry(b, textvariable=clv, width=100))
+
+            f1 = ctk.CTkFrame(b, fg_color="transparent")
+            f1.pack(fill="x", padx=8, pady=4)
+            ctk.CTkLabel(f1, text="鼠标按键：").pack(side="left", padx=(0, 8))
+            ctk.CTkOptionMenu(f1, variable=bv, values=C.MOUSE_BUTTONS, width=120).pack(side="left", padx=(0, 16))
+            ctk.CTkLabel(f1, text="点击次数：").pack(side="left", padx=(0, 8))
+            ctk.CTkEntry(f1, textvariable=clv, width=60).pack(side="left")
+            self._widgets["button"] = bv
             self._widgets["clicks"] = clv
+
+            f2 = ctk.CTkFrame(b, fg_color="transparent")
+            f2.pack(fill="x", padx=8, pady=4)
+            ctk.CTkLabel(f2, text="偏移X：").pack(side="left", padx=(0, 8))
             oxv = ctk.StringVar(value=str(p.get("offset_x", 0)))
+            ctk.CTkEntry(f2, textvariable=oxv, width=80).pack(side="left", padx=(0, 16))
+            ctk.CTkLabel(f2, text="偏移Y：").pack(side="left", padx=(0, 8))
             oyv = ctk.StringVar(value=str(p.get("offset_y", 0)))
-            row("偏移X：", ctk.CTkEntry(b, textvariable=oxv, width=80))
+            ctk.CTkEntry(f2, textvariable=oyv, width=80).pack(side="left")
             self._widgets["offset_x"] = oxv
-            row("偏移Y：", ctk.CTkEntry(b, textvariable=oyv, width=80))
             self._widgets["offset_y"] = oyv
 
         if with_timeout:
